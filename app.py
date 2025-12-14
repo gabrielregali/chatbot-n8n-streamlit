@@ -30,32 +30,26 @@ def call_n8n_webhook(prompt):
         try:
             response_json = response.json()
             
-            # === CÓDIGO DE DEBUGGING AÑADIDO ===
-            # Muestra el JSON COMPLETO en la interfaz de Streamlit para el usuario
-            st.warning("⚠️ DEBUG: Respuesta JSON COMPLETA de n8n:")
-            st.json(response_json)
-            # ==================================
-
-            # Ajusta esta clave 'response' si tu nodo final en n8n usa otro nombre
+            # === DEBUG INFO (OPCIONAL, puedes dejarlo o quitarlo) ===
+            # st.warning("⚠️ DEBUG: Respuesta JSON COMPLETA de n8n:")
+            # st.json(response_json)
+            # =======================================================
             
-            # --- Lógica de Retorno ---
-            # 1. Intenta con la clave 'response'
-            if 'response' in response_json:
-                return response_json['response']
-            
-            # 2. Intenta con la clave 'answer' (si la primera falla)
-            elif 'answer' in response_json:
-                return response_json['answer']
+            # AHORA BUSCAMOS LA CLAVE CORRECTA: 'output' (TODO EN MINÚSCULA)
+            if 'output' in response_json:
+                full_text = response_json['output']
                 
-            # 3. Intenta con la clave 'Output' (si las dos primeras fallan)
-            elif 'Output' in response_json:
-                return response_json['Output']
-
-            # Si ninguna clave estándar funciona, muestra el error y el JSON completo arriba
-            return 'ERROR: No se encontró la clave de respuesta esperada (response, answer o Output) en el JSON de n8n. Por favor, revisa el DEBUG INFO arriba.'
+                # Opcional: Intentar limpiar la cadena de texto de n8n (si contiene el texto de debugging)
+                # La respuesta final que quieres es: "Los empleados tienen 30 días naturales de vacaciones al año..."
+                
+                # Vamos a confiar en que la clave es 'output' y devolverla.
+                return full_text
+            
+            # Si la clave 'output' no está, muestra el error
+            return f'ERROR: Clave de respuesta "{list(response_json.keys())[0]}" no coincide con la esperada.'
             
         except requests.exceptions.JSONDecodeError:
-            # Si n8n no responde con un JSON válido
+            # Error si n8n no responde con un JSON válido
             st.error("Error: n8n respondió, pero el cuerpo no es un JSON válido.")
             return f"Respuesta de texto crudo: {response.text}"
 
@@ -77,3 +71,4 @@ if prompt := st.chat_input("Escribe tu pregunta aquí..."):
     st.session_state.messages.append({"role": "assistant", "content": full_response})
 
     st.chat_message("assistant").write(full_response)
+
