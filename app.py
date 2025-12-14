@@ -1,12 +1,10 @@
 import streamlit as st
 import requests
-import json # Agregamos esta importación por si hay que manejar errores específicos
 
 # *****************************************************************
 # RECUERDA: PEGAR TU URL DEL WEBHOOK DE N8N AQUÍ
 # *****************************************************************
 N8N_WEBHOOK_URL = "https://gabiregali.app.n8n.cloud/webhook/24a20510-8c87-47fb-b4f9-5b7360df0328/chat" 
-# NOTA: Esta URL debe ser la misma que usaste y que funciona.
 
 # --- Configuración y Título ---
 st.set_page_config(page_title="Chatbot RAG con n8n", layout="centered")
@@ -22,33 +20,41 @@ for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
 
 
-# --- Función para Conectarse a n8n (Limpia) ---
-
+# --- Función para Conectarse a n8n ---
 def call_n8n_webhook(prompt):
-    """Llama al webhook de n8n con el prompt del usuario."""
     try:
-        # 1. Preparar y enviar la solicitud
-        # Aseguramos que la clave 'prompt' coincida con la variable que el Agente AI está leyendo en n8n.
         payload = {"prompt": prompt}
         response = requests.post(N8N_WEBHOOK_URL, json=payload)
         response.raise_for_status() 
 
-        # 2. Intentar parsear el JSON
         try:
             response_json = response.json()
             
-            # Buscamos la clave 'response', que es la que configuramos en el Respond to Webhook
-            if 'response' in response_json:
-                return response_json['response']
-            else:
-                return f"Error: n8n respondió, pero no se encontró la clave 'response' en el JSON." 
+            # === DEBUG INFO (OPCIONAL, puedes dejarlo o quitarlo) ===
+            # st.warning("⚠️ DEBUG: Respuesta JSON COMPLETA de n8n:")
+            # st.json(response_json)
+            # =======================================================
+            
+            # AHORA BUSCAMOS LA CLAVE CORRECTA: 'output' (TODO EN MINÚSCULA)
+            if 'output' in response_json:
+                full_text = response_json['output']
                 
-        except json.JSONDecodeError:
-            # Si n8n no responde con un JSON válido
-            return f"Error: n8n no envió un JSON válido. Respuesta de texto: {response.text}"
+                # Opcional: Intentar limpiar la cadena de texto de n8n (si contiene el texto de debugging)
+                # La respuesta final que quieres es: "Los empleados tienen 30 días naturales de vacaciones al año..."
+                
+                # Vamos a confiar en que la clave es 'output' y devolverla.
+                return full_text
+            
+            # Si la clave 'output' no está, muestra el error
+            return f'ERROR: Clave de respuesta "{list(response_json.keys())[0]}" no coincide con la esperada.'
+            
+        except requests.exceptions.JSONDecodeError:
+            # Error si n8n no responde con un JSON válido
+            st.error("Error: n8n respondió, pero el cuerpo no es un JSON válido.")
+            return f"Respuesta de texto crudo: {response.text}"
 
     except requests.exceptions.RequestException as e:
-        # Error de red o código de estado HTTP (4xx o 5xx)
+        # Error de red o código de estado HTTP (ej: 404, 500)
         return f"Error de conexión con n8n. Detalle: {e}"
 
 
@@ -63,4 +69,6 @@ if prompt := st.chat_input("Escribe tu pregunta aquí..."):
         full_response = call_n8n_webhook(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": full_response})
+
     st.chat_message("assistant").write(full_response)
+
