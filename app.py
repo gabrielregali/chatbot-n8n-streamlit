@@ -21,7 +21,6 @@ for msg in st.session_state.messages:
 
 
 # --- Función para Conectarse a n8n ---
-
 def call_n8n_webhook(prompt):
     try:
         payload = {"prompt": prompt}
@@ -30,12 +29,38 @@ def call_n8n_webhook(prompt):
 
         try:
             response_json = response.json()
+            
+            # === CÓDIGO DE DEBUGGING AÑADIDO ===
+            # Muestra el JSON COMPLETO en la interfaz de Streamlit para el usuario
+            st.warning("⚠️ DEBUG: Respuesta JSON COMPLETA de n8n:")
+            st.json(response_json)
+            # ==================================
+
             # Ajusta esta clave 'response' si tu nodo final en n8n usa otro nombre
-            return response_json.get('response', 'Error: n8n respondió, pero la clave JSON es incorrecta.') 
+            
+            # --- Lógica de Retorno ---
+            # 1. Intenta con la clave 'response'
+            if 'response' in response_json:
+                return response_json['response']
+            
+            # 2. Intenta con la clave 'answer' (si la primera falla)
+            elif 'answer' in response_json:
+                return response_json['answer']
+                
+            # 3. Intenta con la clave 'Output' (si las dos primeras fallan)
+            elif 'Output' in response_json:
+                return response_json['Output']
+
+            # Si ninguna clave estándar funciona, muestra el error y el JSON completo arriba
+            return 'ERROR: No se encontró la clave de respuesta esperada (response, answer o Output) en el JSON de n8n. Por favor, revisa el DEBUG INFO arriba.'
+            
         except requests.exceptions.JSONDecodeError:
-            return response.text
+            # Si n8n no responde con un JSON válido
+            st.error("Error: n8n respondió, pero el cuerpo no es un JSON válido.")
+            return f"Respuesta de texto crudo: {response.text}"
 
     except requests.exceptions.RequestException as e:
+        # Error de red o código de estado HTTP (ej: 404, 500)
         return f"Error de conexión con n8n. Detalle: {e}"
 
 
@@ -50,4 +75,5 @@ if prompt := st.chat_input("Escribe tu pregunta aquí..."):
         full_response = call_n8n_webhook(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": full_response})
+
     st.chat_message("assistant").write(full_response)
